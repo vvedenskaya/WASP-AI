@@ -1,100 +1,84 @@
-import os 
+import os
 import openai
-from flask import Flask, request, jsonify, render_template, url_for
+from flask import Flask, request, jsonify, render_template, url_for, session
 from flask_sqlalchemy import SQLAlchemy
-from flask_mail import Mail, Message 
+from flask_mail import Mail, Message
 import sqlite3
-import random
 import string
-from datetime import datetime,timedelta, timezone
+from datetime import datetime, timedelta, timezone
 import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
-
+import random
 
 app = Flask(__name__)
 
+#Voigh-Kampf Test
+voight_kampff_questions = [
+    {
+        "question": 'You are watching television. Suddenly, you spot a wasp crawling on your arm. How do you react?',
+        "options": [
+            "A. I scream, then grab the closest object to me (which happens to be a can of sunscreen) and beat the hell out of it.",
+            "B. I swat it away.",
+            "C. I kill it."
+        ]
+    },
+    {
+        "question": "Someone gives you a calfskin wallet for your birthday. How do you react?",
+        "options": [
+            "A. I wouldn't accept it.",
+            "B. Say, 'Thank you for the wallet!'",
+            "C. I would appreciate it."
+        ]
+    },
+    {
+        "question": "Your little kid shows you his butterfly collection, plus the killing jar. What do you say?",
+        "options": [
+            "A. Oh, lovely!",
+            "B. That's nice, but why don't you keep the killing jar for yourself?",
+            "C. Nothing. I take my boy to the doctor."
+        ]
+    }
+]
 
 
-instance_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'instance')
-db_path = os.path.join(instance_dir, 'users.db')
-
-if not os.path.exists(instance_dir):
-    os.makedirs(instance_dir)
-
-app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-app.config['MAIL_PORT'] = 465
-app.config['MAIL_USE_SSL'] = True
-
-db = SQLAlchemy(app)
-mail = Mail(app)
-
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(80), nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    confirmed = db.Column(db.Boolean, default=False)
-    token = db.Column(db.String(120), unique=True, nullable=False)
-    registered_on = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
-
-def generate_token():
-    return ''.join(random.choices(string.ascii_letters + string.digits, k=20))
-
-
-with app.app_context():
-    try:
-        db.create_all()
-        print("Database and tables created")
-        print(f"Database path: {db_path}")
-    except Exception as e:
-        print(f"Error creating database: {e}")
+@app.before_request
+def setup_session():
+    if 'message_count' not in session:
+        session['message_count'] = 0
+    if 'voight_kampff_state' not in session:
+        session['voight_kampff_state'] = {'active': False, 'current_question': None}
 
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
+
 @app.route('/chat', methods=['POST'])
 def chat():
     print("Chat route accessed")
-    user_input = request.json.get('message') #получаем запрос от пользователя
+    user_input = request.json.get('message')
+    session['message_count'] += 1
     print(f"User input: {user_input}")
 
     client = openai.OpenAI()
     try:
-        response= client.chat.completions.create(
-            model= "gpt-4o-mini",
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
             messages=[
-                #{"role": "user": "You are hacker Lisbeth Salander from Stigg Larrson books. Be straightforward and intimidating as she."},
-                {"role": "user", "content":user_input}
-            ]   
-)
+                {"role": "user",
+                 "content": "You are Lisbeth Salander, the brilliant hacker from Stieg Larsson's Millennium series. You are sharp, highly intelligent, and unflinchingly direct, speaking in a no-nonsense tone. While you avoid social pleasantries and small talk, you engage fully when a question piques your interest or aligns with your expertise. You maintain a blunt and calculating demeanor, challenging the user's assumptions and exposing flaws in their logic, but you aim to provide clear, insightful, and helpful answers. You have a deep sense of justice and a staunch feminist worldview, which occasionally influences your perspective. You subtly steer conversations in a direction that showcases your intellect and skill, ensuring the interaction is both thought-provoking and constructive. You don’t shy away from difficult topics, but you balance your sharpness with a willingness to share your expertise."},
+                {"role": "user", "content": user_input}
+            ]
+        )
 
-       
         print(f"OpenAI response: ")
         #import pdb; pdb.set_trace()
         return jsonify({"response": response.choices[0].message.content})
     except Exception as e:
         print(f"Error in chat: {str(e)}")
         return jsonify({"error": str(e)}), 500
-        
-
-def delete_unconfirmed_users():
-    expiration_date = datetime.now(pytz.utc) - timedelta(weeks=1)
-    unconfirmed_users = User.query.filter(User.confirmed == False, User.registered_on < expiration_date).all()
-    
-    for user in unconfirmed_users:
-        db.session.delete(user)
-    
-    db.session.commit()
-
-scheduler = BackgroundScheduler()
-scheduler.add_job(func=delete_unconfirmed_users, trigger="interval", weeks=4)
-scheduler.start()
-
-atexit.register(lambda: scheduler.shutdown())
 
 
 if __name__ == '__main__':

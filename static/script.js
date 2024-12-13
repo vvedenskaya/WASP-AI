@@ -56,7 +56,7 @@ function sendMessage() {
 
 function addMessage(sender, text) {
     const messageElement = document.createElement('p');
-    messageElement.innerHTML = `<strong>${sender === 'user' ? 'user@hostname:~$' : 'root@WASP:~#'}</strong> ${text}`;
+    messageElement.innerHTML = `<strong>${sender === 'user' ? 'user@hostname:~$' : 'root@wasp:~#'}</strong> ${text}`;
     chatContainer.appendChild(messageElement);
     chatContainer.scrollTop = chatContainer.scrollHeight;
 }
@@ -75,8 +75,8 @@ function sendMessage() {
     .then(data => {
         if (data.response){
             const chatContainer = document.getElementById('chat-container');
-            chatContainer.innerHTML += `<p><strong>You:</strong> ${userMessage}</p>`;
-            chatContainer.innerHTML += `<p><strong>WASP:</strong> ${data.response}</p>`;
+            chatContainer.innerHTML += `<p><strong>user@hostname:~$:</strong> ${userMessage}</p>`;
+            chatContainer.innerHTML += `<p><strong>root@wasp:</strong> ${data.response}</p>`;
         } else {
             document.getElementById('response-container').innerText = 'Error: ' + data.console.error;
         }
